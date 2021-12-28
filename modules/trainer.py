@@ -206,7 +206,7 @@ class Trainer(BaseTrainer):
 
             # log_prob = self.model(images, reports_ids, mode='train', img_mask=img_padding_mask)
             # loss = self.criterion(log_prob, reports_ids, reports_masks)
-            output, log_probs = self.model(images, mode='sample', img_mask=img_padding_mask)
+            output, log_probs = self.model(images, mode='sample', eval=False, img_mask=img_padding_mask)
             if not self.multi_gpu:
                 reports = self.model.tokenizer.decode_scst(output)
                 ground_truths = self.model.tokenizer.decode_batch(reports_ids[:, 1:].numpy())
@@ -253,14 +253,14 @@ class Trainer(BaseTrainer):
                 images, reports_masks = images.to(self.device), reports_masks.to(self.device)
                 if img_padding_mask is not None:
                     img_padding_mask = img_padding_mask.to(self.device)
-                output, _ = self.model(images, mode='sample', img_mask=img_padding_mask)
+                output, _ = self.model(images, mode='sample', eval=True, img_mask=img_padding_mask)
                 # reports = self.model.tokenizer.decode_batch(output.cpu().numpy())
                 if not self.multi_gpu:
                     reports = self.model.tokenizer.decode_batch(output)
-                    ground_truths = self.model.tokenizer.decode_batch(reports_ids[:, 1:].cpu().numpy())
+                    ground_truths = self.model.tokenizer.decode_batch(reports_ids[:, 1:].numpy())
                 else:
                     reports = self.model.module.tokenizer.decode_batch(output)
-                    ground_truths = self.model.module.tokenizer.decode_batch(reports_ids[:, 1:].cpu().numpy())
+                    ground_truths = self.model.module.tokenizer.decode_batch(reports_ids[:, 1:].numpy())
                 print('eval', reports)
                 # loss = self.criterion(output, reports_ids, reports_masks)
                 # eval_loss += loss.item()
@@ -278,18 +278,17 @@ class Trainer(BaseTrainer):
         with torch.no_grad():
             test_gts, test_res = [], []
             for batch_idx, (images_id, images, reports_ids, reports_masks, img_padding_mask) in enumerate(self.test_dataloader):
-                images, reports_ids, reports_masks = images.to(self.device), reports_ids.to(
-                    self.device), reports_masks.to(self.device)
+                images, reports_masks = images.to(self.device), reports_masks.to(self.device)
                 if img_padding_mask is not None:
                     img_padding_mask = img_padding_mask.to(self.device)
-                output, _ = self.model(images, mode='sample', img_mask=img_padding_mask)
+                output, _ = self.model(images, mode='sample', eval=True, img_mask=img_padding_mask)
                 # reports = self.model.tokenizer.decode_batch(output.cpu().numpy())
                 if not self.multi_gpu:
                     reports = self.model.tokenizer.decode_batch(output)
-                    ground_truths = self.model.tokenizer.decode_batch(reports_ids[:, 1:].cpu().numpy())
+                    ground_truths = self.model.tokenizer.decode_batch(reports_ids[:, 1:].numpy())
                 else:
                     reports = self.model.module.tokenizer.decode_batch(output)
-                    ground_truths = self.model.module.tokenizer.decode_batch(reports_ids[:, 1:].cpu().numpy())
+                    ground_truths = self.model.module.tokenizer.decode_batch(reports_ids[:, 1:].numpy())
                 print('test', reports)
                 test_res.extend(reports)
                 test_gts.extend(ground_truths)

@@ -37,7 +37,7 @@ class data_loader(DataLoader):
 
         self.init_kwargs = {
             'dataset': self.dataset,
-            'batch_size': self.batch_size,
+            'batch_size': self.batch_size if split == 'train' else args.n_gpu,
             'shuffle': self.shuffle,
             'collate_fn': self.collate_fn,
             'num_workers': self.num_workers,

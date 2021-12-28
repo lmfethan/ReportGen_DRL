@@ -18,20 +18,15 @@ class Model(nn.Module):
         params = sum([np.prod(p.size()) for p in model_parameters])
         return super().__str__() + '\nTrainable parameters: {}'.format(params)
 
-    def forward(self, images, targets=None, mode='train', img_mask=None):
+    def forward(self, images, eval=False, img_mask=None):
         if self.args.dataset_name == 'iu_xray':
             att_feats_0 = self.visual_extractor(images[:, 0])
             att_feats_1 = self.visual_extractor(images[:, 1])
 
             att_feats = torch.cat((att_feats_0, att_feats_1), dim=1)
-            if mode == 'train':
-                output = self.encoder_decoder(att_feats, targets, mode='forward')
-                return output
-            elif mode == 'sample':
-                sentences, log_probs = self.encoder_decoder(att_feats, mode='sample')
-                return sentences, log_probs
-            else:
-                raise ValueError
+
+            sentences, log_probs = self.encoder_decoder(att_feats, mode='sample')
+            return sentences, log_probs
             
         else:
             bs, pic_len, c, w, h = images.shape
@@ -44,14 +39,9 @@ class Model(nn.Module):
             att_feats = att_feats.reshape(bs, pic_len*patch_num, -1)
             img_padding_mask = img_padding_mask.reshape(bs, -1)
 
-            if mode == 'train':
-                output = self.encoder_decoder(att_feats, targets, mode='forward', att_masks=img_padding_mask)
-                return output
-            elif mode == 'sample':
-                sentences, log_probs = self.encoder_decoder(att_feats, mode='sample', att_masks=img_padding_mask)
-                return sentences, log_probs
-            else:
-                raise ValueError
+            sentences, log_probs = self.encoder_decoder(att_feats, mode='sample', att_masks=img_padding_mask, eval=eval)
+            return sentences, log_probs
+            
             
 
 

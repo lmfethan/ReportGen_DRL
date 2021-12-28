@@ -179,7 +179,7 @@ class Decoder(nn.Module):
 
         return preds
 
-    def caption(self, img_features, beam_size):
+    def sample(self, img_features, beam_size):
 
         bs = img_features.shape[0]
         ret_seqs = torch.zeros((bs, beam_size, self.max_gen_length)).to(img_features.device)
@@ -254,6 +254,82 @@ class Decoder(nn.Module):
                 ret_logprobs[i][j] = completed_sentences_preds[j]
             
         return ret_seqs, ret_logprobs
+    
+    def caption(self, img_features, beam_size):
+
+        prev_words = torch.zeros(beam_size, 1).long().to(img_features.device)
+        img_features = img_features.repeat([beam_size, 1, 1])
+
+        sentences = prev_words
+        top_preds = torch.zeros(beam_size, 1).to(img_features.device)
+        alphas = torch.ones(beam_size, 1, img_features.size(1)).to(img_features.device)
+
+        completed_sentences = []
+        completed_sentences_alphas = []
+        completed_sentences_preds = []
+
+        step = 1
+        h, c = self.get_init_lstm_state(img_features)
+
+        while True:
+            embedding = self.embedding(prev_words).squeeze(1)
+            context, alpha = self.attention(img_features, h)
+            gate = self.sigmoid(self.f_beta(h))
+            gated_context = gate * context
+
+            lstm_input = torch.cat((embedding, gated_context), dim=1)
+            h, c = self.lstm(lstm_input, (h, c))
+            output = self.deep_output(h)
+            output = top_preds.expand_as(output) + output
+
+            if step == 1:
+                top_preds, top_words = output[0].topk(beam_size, 0, True, True)
+            else:
+                top_preds, top_words = output.view(-1).topk(beam_size, 0, True, True)
+            prev_word_idxs = top_words // output.size(1)
+            next_word_idxs = top_words % output.size(1)
+
+            sentences = torch.cat((sentences[prev_word_idxs], next_word_idxs.unsqueeze(1)), dim=1)
+            alphas = torch.cat((alphas[prev_word_idxs], alpha[prev_word_idxs].unsqueeze(1)), dim=1)
+
+            incomplete = [idx for idx, next_word in enumerate(next_word_idxs) if next_word != 0]
+            if step == self.max_gen_length:
+                incomplete = []
+            complete = list(set(range(len(next_word_idxs))) - set(incomplete))
+
+            # print(incomplete, complete, len(complete))
+
+            if len(complete) > 0:
+                # print('complete', top_preds[complete])
+                completed_sentences.extend(sentences[complete].tolist())
+                completed_sentences_alphas.extend(alphas[complete].tolist())
+                completed_sentences_preds.extend(top_preds[complete])
+            beam_size -= len(complete)
+
+            if beam_size == 0:
+                break
+            sentences = sentences[incomplete]
+            alphas = alphas[incomplete]
+            h = h[prev_word_idxs[incomplete]]
+            c = c[prev_word_idxs[incomplete]]
+            img_features = img_features[prev_word_idxs[incomplete]]
+            top_preds = top_preds[incomplete].unsqueeze(1)
+            prev_words = next_word_idxs[incomplete].unsqueeze(1)
+
+            if step >= self.max_gen_length:
+                break
+            step += 1
+        if len(completed_sentences_preds) == 0:
+            # ret = torch.Tensor(0)
+            # print(ret.shape, ret.device)
+            return torch.zeros((1, self.max_gen_length)).to(img_features), alpha
+        idx = completed_sentences_preds.index(max(completed_sentences_preds))
+        sentence = completed_sentences[idx]
+        sentence = torch.Tensor(sentence).to(img_features)[1:]
+        alpha = completed_sentences_alphas[idx]
+        ret = torch.zeros((1, self.max_gen_length)).to(img_features)
+        ret[0][:sentence.shape[-1]] = sentence
+        return ret, alpha
 
 
 
@@ -390,21 +466,12 @@ class EncoderDecoder(nn.Module):
 
         return att_feats, seq, att_masks, seq_mask
 
-    def _forward(self, att_feats, seq, att_masks=None):
-        att_feats, seq, att_masks, seq_mask = self._prepare_feature_forward(att_feats, att_masks, seq)
-        out = self.model(att_feats, seq, att_masks, seq_mask)
-        outputs = F.log_softmax(out, dim=-1)
-        return outputs
-
-    def _sample(self, att_feats, att_masks=None):
+    def forward(self, att_feats, att_masks=None, eval=False):
         att_feats, seq, att_masks, seq_mask = self._prepare_feature_forward(att_feats, att_masks)
         img_features = self.model.encode(att_feats, att_masks)
-        sentences, log_probs = self.model.decoder.caption(img_features, self.beam_size)
-        return sentences, log_probs
-
-    def forward(self, *args, **kwargs):
-        mode = kwargs.get('mode', 'forward')
-        if 'mode' in kwargs:
-            del kwargs['mode']
-        return getattr(self, '_' + mode)(*args, **kwargs)
-
+        if eval:
+            sentence, alpha = self.model.decoder.caption(img_features, self.beam_size)
+            return sentence, alpha
+        else:
+            sentences, log_probs = self.model.decoder.caption(img_features, self.beam_size)
+            return sentences, log_probs
