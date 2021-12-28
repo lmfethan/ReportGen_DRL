@@ -250,7 +250,7 @@ class Decoder(nn.Module):
                 step += 1
 
             for j in range(len(completed_sentences)):
-                ret_seqs[i][j][:completed_sentences[j].shape[-1]] = completed_sentences[j]
+                ret_seqs[i][j][:len(completed_sentences[j])-1] = torch.Tensor(completed_sentences[j][1:])
                 ret_logprobs[i][j] = completed_sentences_preds[j]
             
         return ret_seqs, ret_logprobs

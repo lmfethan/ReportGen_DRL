@@ -223,18 +223,17 @@ class Trainer(BaseTrainer):
 
             for i in range(bs):
                 for j in range(beam_size):
-                    caps_gt[i*beam_size + j] = ground_truths[i]
-                    caps_gen[i*beam_size + j] = reports[i][j]
-            
-            reward = self.evaluator.compute_score(caps_gt, caps_gen)[1].astype(np.float32)
-            reward = torch.from_numpy(reward).to(self.device).view(bs, beam_size)
+                    caps_gt[i*beam_size + j] = [ground_truths[i]]
+                    caps_gen[i*beam_size + j] = [reports[i][j]]
+            reward = self.evaluator.compute_score(caps_gt, caps_gen, verbose=0)[1][0]
+            reward = torch.Tensor(reward).to(self.device).view(bs, beam_size)
             reward_baseline = torch.mean(reward, -1, keepdim=True)
-            loss = -torch.mean(log_probs, -1) * (reward - reward_baseline)
+            loss = -torch.mean(log_probs, -1, keepdim=True) * (reward - reward_baseline)
 
             loss = loss.mean()
             
             train_loss += loss.item()
-            train_reward += reward_baseline * bs
+            train_reward += reward_baseline.mean() * bs
             self.optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_value_(self.model.parameters(), 0.1)
@@ -251,8 +250,7 @@ class Trainer(BaseTrainer):
         with torch.no_grad():
             val_gts, val_res = [], []
             for batch_idx, (images_id, images, reports_ids, reports_masks, img_padding_mask) in enumerate(self.val_dataloader):
-                images, reports_ids, reports_masks = images.to(self.device), reports_ids.to(
-                    self.device), reports_masks.to(self.device)
+                images, reports_masks = images.to(self.device), reports_masks.to(self.device)
                 if img_padding_mask is not None:
                     img_padding_mask = img_padding_mask.to(self.device)
                 output, _ = self.model(images, mode='sample', img_mask=img_padding_mask)

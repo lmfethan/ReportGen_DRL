@@ -21,15 +21,15 @@ def parse_agrs():
     parser.add_argument('--tb_dir', type=str, default='tb/iu_xray/', help='the path to save tensorboard')
 
     # Data input settings
-    parser.add_argument('--image_dir', type=str, default='data/iu_xray/images/', help='the path to the directory containing the data.')
-    parser.add_argument('--ann_path', type=str, default='data/iu_xray/annotation.json', help='the path to the directory containing the data.')
+    parser.add_argument('--image_dir', type=str, default='../ReportGen/data/iu_xray/images/', help='the path to the directory containing the data.')
+    parser.add_argument('--ann_path', type=str, default='../ReportGen/data/iu_xray/annotation.json', help='the path to the directory containing the data.')
 
     # Data loader settings
     parser.add_argument('--dataset_name', type=str, default='iu_xray', choices=['iu_xray', 'mimic_cxr'], help='the dataset to be used.')
     parser.add_argument('--max_seq_length', type=int, default=60, help='the maximum sequence length of the reports.')
     parser.add_argument('--threshold', type=int, default=3, help='the cut off frequency for the words.')
     parser.add_argument('--num_workers', type=int, default=16, help='the number of workers for dataloader.')
-    parser.add_argument('--batch_size', type=int, default=12, help='the number of samples for a batch')
+    parser.add_argument('--batch_size', type=int, default=64, help='the number of samples for a batch')
     parser.add_argument('--img_size', type=int, default=224)
 
     # Model settings (for visual extractor)
@@ -56,7 +56,7 @@ def parse_agrs():
 
     # Sample related
     parser.add_argument('--sample_method', type=str, default='beam_search', help='the sample methods to sample a report.')
-    parser.add_argument('--beam_size', type=int, default=3, help='the beam size when beam searching.')
+    parser.add_argument('--beam_size', type=int, default=5, help='the beam size when beam searching.')
     parser.add_argument('--temperature', type=float, default=1.0, help='the temperature when sampling.')
     parser.add_argument('--sample_n', type=int, default=1, help='the sample number per image.')
     parser.add_argument('--group_size', type=int, default=1, help='the group size.')
@@ -77,7 +77,7 @@ def parse_agrs():
 
     # Optimization
     parser.add_argument('--optim', type=str, default='Adam', help='the type of the optimizer.')
-    parser.add_argument('--lr_res', type=float, default=5e-5, help='the learning rate for the pretrained resnet.')
+    parser.add_argument('--lr_ve', type=float, default=5e-5, help='the learning rate for the pretrained resnet.')
     parser.add_argument('--lr_ed', type=float, default=1e-4, help='the learning rate for the remaining parameters.')
     parser.add_argument('--weight_decay', type=float, default=5e-5, help='the weight decay.')
     parser.add_argument('--amsgrad', type=bool, default=True, help='.')
@@ -101,8 +101,7 @@ def train_recipe(args):
     print('{:>15} : {}'.format('d_model', args.d_model))
     print('{:>15} : {}'.format('d_ff', args.d_ff))
     print('{:>15} : {}'.format('d_vf', args.d_vf))
-    print('{:>15} : {}'.format('lr_res', args.lr_res))
-    print('{:>15} : {}'.format('lr_lp', args.lr_lp))
+    print('{:>15} : {}'.format('lr_ve', args.lr_ve))
     print('{:>15} : {}'.format('lr_ed', args.lr_ed))
     print('{:>15} : {}'.format('weight decay', args.weight_decay))
     print('{:>15} : {}'.format('step_size', args.step_size))
