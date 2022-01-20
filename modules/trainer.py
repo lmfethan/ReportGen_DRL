@@ -40,7 +40,7 @@ class BaseTrainer(object):
             os.makedirs(self.checkpoint_dir)
 
         if args.resume is not None:
-            self._resume_checkpoint(args.resume)
+            self._resume_checkpoint(args.resume, args.not_load_optim)
 
         self.best_recorder = {'val': {self.mnt_metric: self.mnt_best},
                               'test': {self.mnt_metric_test: self.mnt_best}}
@@ -91,7 +91,7 @@ class BaseTrainer(object):
             if epoch % self.save_period == 0:
                 self._save_checkpoint(epoch, save_best=best)
         self._print_best()
-        self._print_best_to_file()
+        #self._print_best_to_file()
 
     def _print_best_to_file(self):
         crt_time = time.asctime(time.localtime(time.time()))
@@ -142,14 +142,15 @@ class BaseTrainer(object):
             torch.save(state, best_path)
             print("Saving current best: model_best.pth ...")
 
-    def _resume_checkpoint(self, resume_path):
+    def _resume_checkpoint(self, resume_path, not_load_optim):
         resume_path = str(resume_path)
         print("Loading checkpoint: {} ...".format(resume_path))
         checkpoint = torch.load(resume_path)
         self.start_epoch = checkpoint['epoch'] + 1
         self.mnt_best = checkpoint['monitor_best']
         self.model.load_state_dict(checkpoint['state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer'])
+        if not not_load_optim:
+            self.optimizer.load_state_dict(checkpoint['optimizer'])
 
         print("Checkpoint loaded. Resume training from epoch {}".format(self.start_epoch))
         print("Current learning rate:", self.optimizer.state_dict()['param_groups'][0]['lr'])
@@ -195,18 +196,17 @@ class Trainer(BaseTrainer):
         train_loss = 0
         train_reward = 0
         self.model.train()
+        
         start_time = time.time()
         for batch_idx, (images_id, images, reports_ids, reports_masks, img_padding_mask) in enumerate(self.train_dataloader):
             images, reports_masks = images.to(self.device), reports_masks.to(self.device)
-
-            gts, res = [], []
 
             if img_padding_mask is not None:
                 img_padding_mask = img_padding_mask.to(self.device)
 
             # log_prob = self.model(images, reports_ids, mode='train', img_mask=img_padding_mask)
             # loss = self.criterion(log_prob, reports_ids, reports_masks)
-            output, log_probs = self.model(images, mode='sample', eval=False, img_mask=img_padding_mask)
+            output, log_probs = self.model(images, img_mask=img_padding_mask)
             if not self.multi_gpu:
                 reports = self.model.tokenizer.decode_scst(output)
                 ground_truths = self.model.tokenizer.decode_batch(reports_ids[:, 1:].numpy())
@@ -225,13 +225,11 @@ class Trainer(BaseTrainer):
                 for j in range(beam_size):
                     caps_gt[i*beam_size + j] = [ground_truths[i]]
                     caps_gen[i*beam_size + j] = [reports[i][j]]
-            reward = self.evaluator.compute_score(caps_gt, caps_gen, verbose=0)[1][0]
-            reward = torch.Tensor(reward).to(self.device).view(bs, beam_size)
+            reward = self.evaluator.compute_score(caps_gt, caps_gen, verbose=0)[1][3]
+            reward = torch.Tensor(reward).to(self.device).view(bs, beam_size).contiguous()
             reward_baseline = torch.mean(reward, -1, keepdim=True)
-            loss = -torch.mean(log_probs, -1, keepdim=True) * (reward - reward_baseline)
-
-            loss = loss.mean()
-            
+            loss = -log_probs * (reward - reward_baseline)
+            loss = torch.mean(loss)
             train_loss += loss.item()
             train_reward += reward_baseline.mean() * bs
             self.optimizer.zero_grad()
@@ -244,7 +242,7 @@ class Trainer(BaseTrainer):
         self.tb_writer.add_scalar('train_loss', train_loss, epoch)
         self.tb_writer.add_scalar('learning rate', self.optimizer.param_groups[0]['lr'], epoch)
         print('time elapsed : ' + str(stop_time - start_time) + ' s')
-
+        
         self.model.eval()
         eval_loss = 0
         with torch.no_grad():
@@ -252,13 +250,15 @@ class Trainer(BaseTrainer):
             for batch_idx, (images_id, images, reports_ids, reports_masks, img_padding_mask) in enumerate(self.val_dataloader):
                 images, reports_masks = images.to(self.device), reports_masks.to(self.device)
                 if img_padding_mask is not None:
-                    img_padding_mask = img_padding_mask.to(self.device)
-                output, _ = self.model(images, mode='sample', eval=True, img_mask=img_padding_mask)
+                    img_padding_mask = img_padding_mask.to(self.device).unsqueeze(-1)
+                # output, _ = self.model.module.generate(images, img_mask=img_padding_mask)
                 # reports = self.model.tokenizer.decode_batch(output.cpu().numpy())
                 if not self.multi_gpu:
+                    output, _ = self.model.generate(images, img_mask=img_padding_mask)
                     reports = self.model.tokenizer.decode_batch(output)
                     ground_truths = self.model.tokenizer.decode_batch(reports_ids[:, 1:].numpy())
                 else:
+                    output, _ = self.model.module.generate(images, img_mask=img_padding_mask)
                     reports = self.model.module.tokenizer.decode_batch(output)
                     ground_truths = self.model.module.tokenizer.decode_batch(reports_ids[:, 1:].numpy())
                 print('eval', reports)
@@ -281,12 +281,14 @@ class Trainer(BaseTrainer):
                 images, reports_masks = images.to(self.device), reports_masks.to(self.device)
                 if img_padding_mask is not None:
                     img_padding_mask = img_padding_mask.to(self.device)
-                output, _ = self.model(images, mode='sample', eval=True, img_mask=img_padding_mask)
+                # output, _ = self.model.module.generate(images, img_mask=img_padding_mask)
                 # reports = self.model.tokenizer.decode_batch(output.cpu().numpy())
                 if not self.multi_gpu:
+                    output, _ = self.model.generate(images, img_mask=img_padding_mask)
                     reports = self.model.tokenizer.decode_batch(output)
                     ground_truths = self.model.tokenizer.decode_batch(reports_ids[:, 1:].numpy())
                 else:
+                    output, _ = self.model.module.generate(images, img_mask=img_padding_mask)
                     reports = self.model.module.tokenizer.decode_batch(output)
                     ground_truths = self.model.module.tokenizer.decode_batch(reports_ids[:, 1:].numpy())
                 print('test', reports)

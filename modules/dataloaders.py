@@ -35,9 +35,11 @@ class data_loader(DataLoader):
         else:
             self.dataset = MimiccxrMultiImageDataset(self.args, self.tokenizer, self.split, transform=self.transform)
 
+        bs_eval = 4 if self.dataset_name == 'iu_xray' else 1
+
         self.init_kwargs = {
             'dataset': self.dataset,
-            'batch_size': self.batch_size if split == 'train' else args.n_gpu,
+            'batch_size': self.batch_size if split == 'train' else bs_eval,
             'shuffle': self.shuffle,
             'collate_fn': self.collate_fn,
             'num_workers': self.num_workers,

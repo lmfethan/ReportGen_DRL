@@ -466,12 +466,12 @@ class EncoderDecoder(nn.Module):
 
         return att_feats, seq, att_masks, seq_mask
 
-    def forward(self, att_feats, att_masks=None, eval=False):
+    def forward(self, att_feats, att_masks=None, evaluate=False):
         att_feats, seq, att_masks, seq_mask = self._prepare_feature_forward(att_feats, att_masks)
         img_features = self.model.encode(att_feats, att_masks)
-        if eval:
+        if evaluate:
             sentence, alpha = self.model.decoder.caption(img_features, self.beam_size)
             return sentence, alpha
         else:
-            sentences, log_probs = self.model.decoder.caption(img_features, self.beam_size)
+            sentences, log_probs = self.model.decoder.sample(img_features, self.beam_size)
             return sentences, log_probs

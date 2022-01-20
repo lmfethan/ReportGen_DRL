@@ -28,8 +28,8 @@ def parse_agrs():
     parser.add_argument('--dataset_name', type=str, default='iu_xray', choices=['iu_xray', 'mimic_cxr'], help='the dataset to be used.')
     parser.add_argument('--max_seq_length', type=int, default=60, help='the maximum sequence length of the reports.')
     parser.add_argument('--threshold', type=int, default=3, help='the cut off frequency for the words.')
-    parser.add_argument('--num_workers', type=int, default=16, help='the number of workers for dataloader.')
-    parser.add_argument('--batch_size', type=int, default=64, help='the number of samples for a batch')
+    parser.add_argument('--num_workers', type=int, default=8, help='the number of workers for dataloader.')
+    parser.add_argument('--batch_size', type=int, default=32, help='the number of samples for a batch')
     parser.add_argument('--img_size', type=int, default=224)
 
     # Model settings (for visual extractor)
@@ -90,6 +90,7 @@ def parse_agrs():
     # Others
     parser.add_argument('--seed', type=int, default=9223, help='.')
     parser.add_argument('--resume', type=str, help='whether to resume the training from existing checkpoints.')
+    parser.add_argument('--not_load_optim', action='store_true')
     parser.add_argument('--save', action='store_true')
 
     args = parser.parse_args()

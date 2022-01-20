@@ -10,8 +10,8 @@ class VisualExtractor(nn.Module):
         self.pretrained = args.visual_extractor_pretrained
         model = getattr(models, self.visual_extractor)(pretrained=self.pretrained)
 
-        model.layer3.add_module('att_layer3', attention.SimAM())
-        model.layer4.add_module('att_layer4', attention.SimAM())
+        #model.layer3.add_module('att_layer3', attention.SimAM())
+        #model.layer4.add_module('att_layer4', attention.SimAM())
 
         modules = list(model.children())[:-2]
 
